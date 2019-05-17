@@ -2,13 +2,14 @@ from flask import Flask,jsonify,make_response,json,request
 from collections import OrderedDict
 import MySQLdb
 import datetime
+import matplotlib.pyplot as plt
 
 
 ### DB 접속 ###
 conn = MySQLdb.connect(host='127.0.0.1', port=3306, database='hufsCongestion', user='root', passwd='hufscongestion')
 c = conn.cursor()
 
-### Flask Server ###
+### Flask Server Setting ###
 app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
 
@@ -19,6 +20,35 @@ def makeResponse(data):
     resp.status_code = 200
     resp.mimetype="application/json"
     return resp
+
+### 분석 그래프 생성. 현재 디렉토리 "vis.png" ###
+def makeGraph(x,y):
+    plt.plot(x,y,'g')
+    plt.xlabel("time")
+    plt.ylabel("number of people")
+    plt.title("Congestion of recent 1 hour")
+    fig = plt.gcf()
+    fig.savefig("vis.png")
+
+### 최근 한 시간의 데이터 fetch ###
+def curVisualization():
+    sql = """SELECT time FROM currentAnalysis ORDER BY time DESC limit 12"""
+    c.execute(sql)
+    time = c.fetchall()
+    tmp = [v[0] for v in time]
+    x = [str(v.hour)+"-"+str(v.minute) for v in tmp]
+    x.reverse()
+    #x = ['13-48', '13-48', '13-48', '13-49', '13-58', '13-59', '14-0', '14-1', '17-40', '17-50', '18-30', '18-30']
+
+    sql = """SELECT result FROM currentAnalysis ORDER BY time DESC limit 12"""
+    c.execute(sql)
+    res = c.fetchall()
+    y = [v[0] for v in res]
+    y.reverse()
+    #y = [None, None, None, None, None, None, None, None, None, 2, None, 2] #현재 None 값 때문에 임의로 y 설정
+    y = [3,5,2,1,7,8,9,2,3,4,6,1]
+
+    return (x,y)
 
 
 
@@ -33,6 +63,9 @@ def curApple():
     userId = "test getCurApple" #테스트용
     reqTime = datetime.datetime.now()
 
+
+
+    """ 분석값 """
     #DB에 가장 최근 분석값 요청
     sql = """SELECT result FROM currentAnalysis ORDER BY time DESC limit 1"""
     c.execute(sql)
@@ -42,16 +75,24 @@ def curApple():
     c.execute(sql,(userId,reqTime))
     conn.commit()
 
-    #이상치 제거
+    """ 시각화 """
+    x,y = curVisualization()
+    makeGraph(x,y)
+
+    #이상치 제거 및 응답 전송
     if(dbResult == None):
         text = "현재 분석이 불가능하니 잠시만 기다려주세요!"
+        data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
     else:
-        text = "현재 공간에 " + str(dbResult) + "명이 있습니다."
+        title = "현재 혼잡도 및 최근 한 시간 혼잡도입니다!"
+        decription = "위 그래프는 최근 한 시간 혼잡도 분석 결과입니다!\n현재 공간에는 " + str(dbResult) + "명이 있습니다!" 
+        url = "vis.png"
+        data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url}}}]}}
 
-    #응답 전송
-    data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
+
     resp = makeResponse(data)
     return resp
+
 
 ### 평균혼잡도 분석값 응답 ###
 @app.route("/get/avgApple",methods=['GET','POST'])
