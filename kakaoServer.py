@@ -1,4 +1,4 @@
-from flask import Flask,jsonify,make_response,json,request
+from flask import Flask,jsonify,make_response,json,request,send_file
 from collections import OrderedDict
 import MySQLdb
 import datetime
@@ -50,7 +50,10 @@ def curVisualization():
 
     return (x,y)
 
-
+@app.route("/getGraph",methods=['GET','POST'])
+def getGraph():
+    filename = "vis.png"
+    return send_file(filename, mimetype="image/gif")
 
 ### 현재혼잡도 분석값 응답 ###
 @app.route("/get/curApple",methods=['GET','POST'])
@@ -85,9 +88,9 @@ def curApple():
         data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
     else:
         title = "현재 혼잡도 및 최근 한 시간 혼잡도입니다!"
-        decription = "위 그래프는 최근 한 시간 혼잡도 분석 결과입니다!\n현재 공간에는 " + str(dbResult) + "명이 있습니다!" 
-        url = "vis.png"
-        data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url}}}]}}
+        description = "위 그래프는 최근 한 시간 혼잡도 분석 결과입니다!\n현재 공간에는 " + str(dbResult) + "명이 있습니다!" 
+        url = "http://110.34.109.166:4967/getGraph"
+        data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
 
 
     resp = makeResponse(data)
