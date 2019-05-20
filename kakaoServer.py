@@ -3,6 +3,9 @@ from collections import OrderedDict
 import MySQLdb
 import datetime
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
+import time
 
 
 ### DB 접속 ###
@@ -21,20 +24,6 @@ def makeResponse(data):
     resp.mimetype="application/json"
     return resp
 
-### 분석 그래프 생성. 현재 디렉토리 "vis.png" ###
-def makeGraph(x,y,type):
-    if type == "cur":
-        plt.plot(x,y,'g')
-        plt.xlabel("time")
-        plt.ylabel("number of people")
-        plt.title("Congestion of recent 1 hour")
-    elif type == "avg":
-        plt.plot(x,y,'b')
-        plt.xlabel("time")
-        plt.ylabel("average number of people")
-        plt.title("Average Congestion")
-    fig = plt.gcf()
-    fig.savefig("vis.png")
 
 ### 그래프 그리기 위한 그래프 x,y 축 값 추출 후 반환 ###
 def curVisualization():
@@ -58,37 +47,76 @@ def curVisualization():
     #y = [None, None, None, None, None, None, None, None, None, 2, None, 2] #현재 None 값 때문에 임의로 y 설정
     y = [3,5,2,1,7,8,9,2,3,4,6,1]
 
+
     return (x,y)
 
 ### 그래프 그리기 위한 그래프 x,y 축 값 추출 후 반환 ###
 def avgVisualization(target):
     #유저가 요청한 시간 앞 3시간치
+    avgList = tuple()
     conn.commit()
     sql = """SELECT hour,result FROM averageAnalysis WHERE hour < (%s) ORDER BY hour desc limit 3"""
     c.execute(sql,(target,))
     avgList = c.fetchall()
-    avgList = list(avgList).reverse()
+    avgList = list(avgList)
+    avgList.reverse()
+
     #유저가 요청한 시간대
     conn.commit()
     sql = """SELECT hour,result FROM averageAnalysis WHERE hour = (%s)"""
-    c.execute(sql,(tartget,))
+    c.execute(sql,(target,))
     avgList += c.fetchall()
-    dbResult = avgList[-1]
+    dbResult = avgList[-1][1]
+
     #유저가 요청한 시간 뒤 3시간치
     conn.commit()
     sql = """SELECT hour,result FROM averageAnalysis WHERE hour > (%s) ORDER BY hour asc limit 3"""
     c.execute(sql,(target,))
     avgList += c.fetchall()
     
-    x = [v[0] for v in avgList]
+    x = [str(v[0]) for v in avgList]
     y = [v[1] for v in avgList]
+
+
 
     return (x,y,dbResult)
 
-@app.route("/getGraph",methods=['GET','POST'])
-def getGraph():
-    filename = "vis.png"
-    return send_file(filename, mimetype="image/gif")
+### 분석 그래프 생성. 현재 디렉토리 "vis.png" ###
+def makeGraph(x,y,type):
+    if type == "cur":
+        plt.clf()
+        plt.plot(x,y,'g')
+        plt.xlabel("time")
+        plt.ylabel("number of people")
+        plt.title("Congestion of recent 1 hour")
+        cur = plt.gcf()
+        cur.savefig("cur.png")
+    elif type == "avg":
+        plt.clf()
+        plt.plot(x,y,'b')
+        plt.xlabel("time")
+        plt.ylabel("average number of people")
+        plt.title("Average Congestion")
+        avg = plt.gcf()
+        avg.savefig("avg.png")
+
+
+
+
+    
+
+@app.route("/getGraph/avg",methods=['GET','POST'])
+def getAvgGraph():
+    time.sleep(2)
+    filename2 = "avg.png"
+    return send_file(filename2, as_attachment=True,mimetype="image/gif")
+
+
+@app.route("/getGraph/cur",methods=['GET','POST'])
+def getCurGraph():
+    time.sleep(2)
+    filename = "cur.png"
+    return send_file(filename, as_attachment=True,mimetype="image/gif")
 
 ### 현재혼잡도 분석값 응답 ###
 @app.route("/get/curApple",methods=['GET','POST'])
@@ -119,6 +147,7 @@ def curApple():
     x,y = curVisualization()
     makeGraph(x,y,"cur")
 
+    
     #이상치 제거 및 응답 전송
     if(dbResult == None):
         text = "현재 분석이 불가능하니 잠시만 기다려주세요!"
@@ -126,7 +155,7 @@ def curApple():
     else:
         title = "현재 공간에는 " + str(dbResult) + "명이 있습니다!" 
         description = "위 그래프는 최근 한 시간 혼잡도 분석 결과입니다!\n" 
-        url = "http://110.34.109.166:4967/getGraph"
+        url = "http://110.34.109.166:4967/getGraph/cur"
         data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
 
 
@@ -135,7 +164,7 @@ def curApple():
 
 
 ### 평균혼잡도 분석값 응답 ###
-@app.route("/get/avgApple",methods=['GET','POST'])
+@app.route("/fuck/avgApple",methods=['GET','POST'])
 def avgApple():
 
     kakaoReq = request.json
@@ -147,10 +176,12 @@ def avgApple():
 
     #유저가 요청한 시간대 추출
     target = reqTime.hour
-
-    x,y,dbResult = avgVisualization(target)
+    print(target)
+    
+    #x,y,dbResult = avgVisualization(target)
+    x,y,dbResult = avgVisualization(16)
     makeGraph(x,y,"avg")
-
+    
 
     #이상치 제거
     if(dbResult == None):
@@ -159,15 +190,20 @@ def avgApple():
     else:
         title = "이 시간대에는 평균 " + str(dbResult) + "명이 있습니다!" 
         description = "위 그래프는 현재 기준 전,후 3시간 동안의 평균 혼잡도 분석 결과입니다!\n" 
-        url = "http://110.34.109.166:4967/getGraph"
+        url = "http://110.34.109.166:4967/getGraph/avg"
         data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
 
     #응답 전송
     resp = makeResponse(data)
     return resp
 
+@app.route('/favicon.ico',methods=['GET','POST'])
+def favicon():
+    filename = "vis.png"
+    return send_file(filename, mimetype="image/gif")
+
 ### 한산한 시간대 분석값 응답 ###
-@app.route("/get/timeAnal",methods=['GET','POST'])
+@app.route("/timeAnal",methods=['GET','POST'])
 def timeAnal():
 
     kakaoReq = request.json
@@ -178,15 +214,14 @@ def timeAnal():
     reqTime = datetime.datetime.now()
 
     #DB 연동 1,2,3,4,5주전 결과 값을 들고 와야 함. DB에서 그렇게 긁어 오는 법을 알아내야 함. 긁어와서 언제가 한산한지 보내기만 하면 됨.
-
+    '''
     sql = """SELECT requestTime FROM customerKakao WHERE requestTime >= DATE_ADD(NOW(), INTERVAL -1 WEEK)"""
     c.execute(sql)
     dbResult = c.fetchone()[0]
     sql = """INSERT INTO customerKakao (id, requestTime) VALUES (%s,%s)"""
     c.execute(sql,(userId,reqTime))
     conn.commit()
-
-
+    '''
 
     text = "한산한 시간대 분석 기능은 현재 업데이트 예정 기능입니다!"
     data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
@@ -194,4 +229,4 @@ def timeAnal():
     return resp
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=4967)
+    app.run(debug=True,host="0.0.0.0", port=4967)
