@@ -22,33 +22,68 @@ def makeResponse(data):
     return resp
 
 ### 분석 그래프 생성. 현재 디렉토리 "vis.png" ###
-def makeGraph(x,y):
-    plt.plot(x,y,'g')
-    plt.xlabel("time")
-    plt.ylabel("number of people")
-    plt.title("Congestion of recent 1 hour")
+def makeGraph(x,y,type):
+    if type == "cur":
+        plt.plot(x,y,'g')
+        plt.xlabel("time")
+        plt.ylabel("number of people")
+        plt.title("Congestion of recent 1 hour")
+    elif type == "avg":
+        plt.plot(x,y,'b')
+        plt.xlabel("time")
+        plt.ylabel("average number of people")
+        plt.title("Average Congestion")
     fig = plt.gcf()
     fig.savefig("vis.png")
 
-### 최근 한 시간의 데이터 fetch ###
+### 그래프 그리기 위한 그래프 x,y 축 값 추출 후 반환 ###
 def curVisualization():
+    conn.commit()
     sql = """SELECT time FROM currentAnalysis ORDER BY time DESC limit 12"""
     c.execute(sql)
     time = c.fetchall()
     tmp = [v[0] for v in time]
     x = [str(v.hour)+"-"+str(v.minute) for v in tmp]
     x.reverse()
+    #이런 식으로 저장됨
     #x = ['13-48', '13-48', '13-48', '13-49', '13-58', '13-59', '14-0', '14-1', '17-40', '17-50', '18-30', '18-30']
 
+    conn.commit()
     sql = """SELECT result FROM currentAnalysis ORDER BY time DESC limit 12"""
     c.execute(sql)
     res = c.fetchall()
     y = [v[0] for v in res]
     y.reverse()
+    #이런 식으로 저장됨
     #y = [None, None, None, None, None, None, None, None, None, 2, None, 2] #현재 None 값 때문에 임의로 y 설정
     y = [3,5,2,1,7,8,9,2,3,4,6,1]
 
     return (x,y)
+
+### 그래프 그리기 위한 그래프 x,y 축 값 추출 후 반환 ###
+def avgVisualization(target):
+    #유저가 요청한 시간 앞 3시간치
+    conn.commit()
+    sql = """SELECT hour,result FROM averageAnalysis WHERE hour < (%s) ORDER BY hour desc limit 3"""
+    c.execute(sql,(target,))
+    avgList = c.fetchall()
+    avgList = list(avgList).reverse()
+    #유저가 요청한 시간대
+    conn.commit()
+    sql = """SELECT hour,result FROM averageAnalysis WHERE hour = (%s)"""
+    c.execute(sql,(tartget,))
+    avgList += c.fetchall()
+    dbResult = avgList[-1]
+    #유저가 요청한 시간 뒤 3시간치
+    conn.commit()
+    sql = """SELECT hour,result FROM averageAnalysis WHERE hour > (%s) ORDER BY hour asc limit 3"""
+    c.execute(sql,(target,))
+    avgList += c.fetchall()
+    
+    x = [v[0] for v in avgList]
+    y = [v[1] for v in avgList]
+
+    return (x,y,dbResult)
 
 @app.route("/getGraph",methods=['GET','POST'])
 def getGraph():
@@ -70,25 +105,27 @@ def curApple():
 
     """ 분석값 """
     #DB에 가장 최근 분석값 요청
+    conn.commit()
     sql = """SELECT result FROM currentAnalysis ORDER BY time DESC limit 1"""
     c.execute(sql)
     dbResult = c.fetchone()[0]
     #DB에 유저 정보 삽입
+    conn.commit()
     sql = """INSERT INTO customerKakao (id, requestTime) VALUES (%s,%s)"""
     c.execute(sql,(userId,reqTime))
     conn.commit()
 
     """ 시각화 """
     x,y = curVisualization()
-    makeGraph(x,y)
+    makeGraph(x,y,"cur")
 
     #이상치 제거 및 응답 전송
     if(dbResult == None):
         text = "현재 분석이 불가능하니 잠시만 기다려주세요!"
         data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
     else:
-        title = "현재 혼잡도 및 최근 한 시간 혼잡도입니다!"
-        description = "위 그래프는 최근 한 시간 혼잡도 분석 결과입니다!\n현재 공간에는 " + str(dbResult) + "명이 있습니다!" 
+        title = "현재 공간에는 " + str(dbResult) + "명이 있습니다!" 
+        description = "위 그래프는 최근 한 시간 혼잡도 분석 결과입니다!\n" 
         url = "http://110.34.109.166:4967/getGraph"
         data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
 
@@ -111,25 +148,21 @@ def avgApple():
     #유저가 요청한 시간대 추출
     target = reqTime.hour
 
-    
-    #DB에 요청한 시간대 평균 분석값 요청
-    sql = """SELECT result FROM averageAnalysis WHERE hour = (%s)"""
-    c.execute(sql, (target,))
-    dbResult = c.fetchone()
-    #dbResult = c.fetchall()??
-    #DB에 유저 정보 삽입
-    sql = """INSERT INTO customerKakao (id, requestTime) VALUES (%s,%s)"""
-    c.execute(sql,(userId,reqTime))
-    conn.commit()
+    x,y,dbResult = avgVisualization(target)
+    makeGraph(x,y,"avg")
+
 
     #이상치 제거
     if(dbResult == None):
-        text = "현재 서비스 시간이 아닙니다. 서비스 시간은 09:00 - 22:00 입니다."
+        text = "현재 분석이 불가능하니 잠시만 기다려주세요!"
+        data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
     else:
-        text = "최근 일주일 간 이 시간대에 평균" + str(dbResult) + "명이 있었습니다."
+        title = "이 시간대에는 평균 " + str(dbResult) + "명이 있습니다!" 
+        description = "위 그래프는 현재 기준 전,후 3시간 동안의 평균 혼잡도 분석 결과입니다!\n" 
+        url = "http://110.34.109.166:4967/getGraph"
+        data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
 
     #응답 전송
-    data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
     resp = makeResponse(data)
     return resp
 
