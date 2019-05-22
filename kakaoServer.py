@@ -16,7 +16,7 @@ import random
 conn = MySQLdb.connect(host='127.0.0.1', port=3306, database='hufsCongestion', user='root', passwd='hufscongestion')
 c = conn.cursor()
 
-### Flask Server Setting ###
+### set Flask Server and run it ###
 app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
 
@@ -44,7 +44,8 @@ def curVisualization():
     c.execute(sql)
     DBtime = c.fetchall()
     tmp = [v[0] for v in DBtime]
-    time = [str(v.hour)+"-"+str(v.minute) for v in tmp]
+    #time = [str(v.hour)+"-"+str(v.minute) for v in tmp]
+    time = ["{0}-{1}".format(v.hour,v.minute) for v in tmp]
     time.reverse()
     #이런 식으로 저장됨
     #x = ['13-48', '13-48', '13-48', '13-49', '13-58', '13-59', '14-0', '14-1', '17-40', '17-50', '18-30', '18-30']
@@ -59,8 +60,8 @@ def curVisualization():
     #y = [None, None, None, None, None, None, None, None, None, 2, None, 2] #현재 None 값 때문에 임의로 y 설정
     nHuman = [3,5,2,1,7,8,9,2,3,4,6,1]
 
-
     return (time,nHuman)
+
 
 ### 그래프 그리기 위한 그래프 x,y 축 값 추출 후 반환 ###
 def avgVisualization(target):
@@ -85,13 +86,12 @@ def avgVisualization(target):
     sql = """SELECT hour,result FROM averageAnalysis WHERE hour > (%s) ORDER BY hour asc limit 3"""
     c.execute(sql,(target,))
     avgList += c.fetchall()
-    
-    hour = [str(v[0]) for v in avgList]
+
+    hour = ["{0}".format(v[0]) for v in avgList]
     nHuman = [v[1] for v in avgList]
 
-
-
     return (hour,nHuman,dbResult)
+
 
 ### 한산한 시간대 그래프 그리기 위한 그래프 x,y 축 값 추출 후 반환 ###
 def quietVisualization():
@@ -100,7 +100,7 @@ def quietVisualization():
     c.execute(sql)
     Tquiet = c.fetchall()
 
-    hour = [str(v[0]) for v in Tquiet]
+    hour = ["{0}".format(v[0]) for v in Tquiet]
     nHuman = [v[1] for v in Tquiet]
     dbResult = [time for time in hour][:3]
 
@@ -114,8 +114,9 @@ def quietVisualization():
 
 ### 분석 그래프 생성. 현재 디렉토리 "vis.png" ###
 def makeGraph(x,y,type):
+    plt.clf()
+
     if type == "cur":
-        plt.clf()
         plt.plot(x,y,'g')
         plt.xlabel("time")
         plt.ylabel("number of people")
@@ -123,7 +124,6 @@ def makeGraph(x,y,type):
         cur = plt.gcf()
         cur.savefig("cur.png")
     elif type == "avg":
-        plt.clf()
         plt.plot(x,y,'b')
         plt.xlabel("time")
         plt.ylabel("average number of people")
@@ -131,7 +131,6 @@ def makeGraph(x,y,type):
         avg = plt.gcf()
         avg.savefig("avg.png")
     elif type == "qtt":
-        plt.clf()
         plt.plot(x,y,'y')
         plt.xlabel("time")
         plt.ylabel("average number of people")
@@ -149,24 +148,24 @@ def makeGraph(x,y,type):
 
 """                 여기서부터                  """
 """#4                 라우팅                    """
-    
+
 
 @app.route("/getGraph/avg/<int:forUpdate>",methods=['GET','POST'])
 def getAvgGraph(forUpdate):
-    time.sleep(2)
+    time.sleep(1)
     filename2 = "avg.png"
     return send_file(filename2, as_attachment=True,mimetype="image/gif")
 
 
 @app.route("/getGraph/cur/<int:forUpdate>",methods=['GET','POST'])
 def getCurGraph(forUpdate):
-    time.sleep(2)
+    time.sleep(1)
     filename = "cur.png"
     return send_file(filename, as_attachment=True,mimetype="image/gif")
 
 @app.route("/getGraph/qtt/<int:forUpdate>",methods=['GET','POST'])
 def getQttGraph(forUpdate):
-    time.sleep(2)
+    time.sleep(1)
     filename = "qtt.png"
     return send_file(filename, as_attachment=True,mimetype="image/gif")
 
@@ -177,8 +176,8 @@ def curApple():
     kakaoReq = request.json
 
     #요청한 유저 정보 추출
-    #userId = kakaoReq["userRequest"]["user"]["id"] #배포용
-    userId = "test getCurApple" #테스트용
+    userId = kakaoReq["userRequest"]["user"]["id"] #배포용
+    #userId = "test getCurApple" #테스트용
     reqTime = datetime.datetime.now()
 
 
@@ -199,15 +198,15 @@ def curApple():
     x,y = curVisualization()
     makeGraph(x,y,"cur")
 
-    
+
     #이상치 제거 및 응답 전송
     if(dbResult == None):
         text = "현재 분석이 불가능하니 잠시만 기다려주세요!"
         data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
     else:
-        title = "현재 공간에는 " + str(dbResult) + "명이 있습니다!" 
-        description = "위 그래프는 최근 한 시간 혼잡도 분석 결과입니다!\n" 
-        url = "http://110.34.109.166:4967/getGraph/cur/" + str(random.randint(1,1000))
+        title = "현재 공간에는 {0}명이 있습니다.".format(dbResult)
+        description = "위 그래프는 최근 한 시간 \n혼잡도 분석 결과입니다.\n"
+        url = "http://110.34.109.166:4967/getGraph/cur/{0}".format(random.randint(1,1000))
         data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
 
 
@@ -222,26 +221,26 @@ def avgApple():
     kakaoReq = request.json
 
     #요청한 유저 정보 추출
-    #userId = kakaoReq["userRequest"]["user"]["id"] #배포용
-    userId = "test getAvgApple" #테스트용
+    userId = kakaoReq["userRequest"]["user"]["id"] #배포용
+    #userId = "test getAvgApple" #테스트용
     reqTime = datetime.datetime.now()
 
     #유저가 요청한 시간대 추출
     target = reqTime.hour
-    
-    #x,y,dbResult = avgVisualization(target) #배포용
-    x,y,dbResult = avgVisualization(12) #테스트용
+
+    x,y,dbResult = avgVisualization(target) #배포용
+    #x,y,dbResult = avgVisualization(12) #테스트용
     makeGraph(x,y,"avg")
-    
+
 
     #이상치 제거
     if(dbResult == None):
         text = "현재 분석이 불가능하니 잠시만 기다려주세요!"
         data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
     else:
-        title = "이 시간대에는 평균 " + str(dbResult) + "명이 있습니다!" 
-        description = "위 그래프는 현재 기준 전,후 3시간 동안의 평균 혼잡도 분석 결과입니다!\n" 
-        url = "http://110.34.109.166:4967/getGraph/avg/" + str(random.randint(1,1000))
+        title = "이 시간대에는 평균 {0}명이 있습니다.".format(dbResult)
+        description = "위 그래프는 현재 기준 전,후 3시간 \n동안의 평균 혼잡도 분석 결과입니다.\n"
+        url = "http://110.34.109.166:4967/getGraph/avg/{0}".format(random.randint(1,1000))
         data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
 
     #응답 전송
@@ -255,8 +254,8 @@ def quietT():
     kakaoReq = request.json
 
     #요청한 유저 정보 추출
-    #userId = kakaoReq["userRequest"]["user"]["id"] #배포용
-    userId = "test getQuietTime" #테스트용
+    userId = kakaoReq["userRequest"]["user"]["id"] #배포용
+    #userId = "test getQuietTime" #테스트용
     reqTime = datetime.datetime.now()
 
     #DB에 유저 정보 삽입
@@ -275,9 +274,9 @@ def quietT():
         text = "현재 분석이 불가능하니 잠시만 기다려주세요!"
         data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
     else:
-        title = "평균적으로 한산한 시간대는\n {0}시, {1}시, {2}시 순입니다!".format(dbResult[0],dbResult[1],dbResult[2])
-        description = "위 그래프는 평균적으로 가장 한산한 6시간을 분석한 그래프입니다.\n" 
-        url = "http://110.34.109.166:4967/getGraph/qtt/" + str(random.randint(1,1000))
+        title = "평균적으로 한산한 시간대는\n {0}시, {1}시, {2}시 순입니다.".format(dbResult[0],dbResult[1],dbResult[2])
+        description = "위 그래프는 평균적으로 가장 한산한 \n6시간을 분석한 그래프입니다.\n"
+        url = "http://110.34.109.166:4967/getGraph/qtt/{0}".format(random.randint(1,1000))
         data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
 
     resp = makeResponse(data)
