@@ -96,13 +96,13 @@ def avgVisualization(target):
 ### 한산한 시간대 그래프 그리기 위한 그래프 x,y 축 값 추출 후 반환 ###
 def quietVisualization():
     conn.commit()
-    sql = """ SELECT hour,result FROM averageAnalysis ORDER BY result desc limit 6"""
+    sql = """ SELECT hour,result FROM averageAnalysis ORDER BY result asc limit 6"""
     c.execute(sql)
     Tquiet = c.fetchall()
 
     hour = [str(v[0]) for v in Tquiet]
     nHuman = [v[1] for v in Tquiet]
-    dbResult = [time for time in x][:3]
+    dbResult = [time for time in hour][:3]
 
     return (hour,nHuman,dbResult)
 
@@ -229,8 +229,8 @@ def avgApple():
     #유저가 요청한 시간대 추출
     target = reqTime.hour
     
-    x,y,dbResult = avgVisualization(target) #배포용
-    #x,y,dbResult = avgVisualization(16) #테스트용
+    #x,y,dbResult = avgVisualization(target) #배포용
+    x,y,dbResult = avgVisualization(12) #테스트용
     makeGraph(x,y,"avg")
     
 
@@ -265,7 +265,7 @@ def quietT():
     c.execute(sql,(userId,reqTime))
     conn.commit()
 
-    x,y,dbResult = avgVisualization(target)
+    x,y,dbResult = quietVisualization()
     makeGraph(x,y,"qtt")
 
 
@@ -275,7 +275,7 @@ def quietT():
         text = "현재 분석이 불가능하니 잠시만 기다려주세요!"
         data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
     else:
-        title = "평균적으로 한산한 시간대는 {0}시, {1}시, {2}시 순입니다!".format(dbResult[0],dbResult[1],dbResult[2])
+        title = "평균적으로 한산한 시간대는\n {0}시, {1}시, {2}시 순입니다!".format(dbResult[0],dbResult[1],dbResult[2])
         description = "위 그래프는 평균적으로 가장 한산한 6시간을 분석한 그래프입니다.\n" 
         url = "http://110.34.109.166:4967/getGraph/qtt/" + str(random.randint(1,1000))
         data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
