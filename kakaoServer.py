@@ -3,10 +3,14 @@ from collections import OrderedDict
 import MySQLdb
 import datetime
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure
 import time
+import random
 
+
+
+
+
+"""#1                       스킬 서버 준비                          """
 
 ### DB 접속 ###
 conn = MySQLdb.connect(host='127.0.0.1', port=3306, database='hufsCongestion', user='root', passwd='hufscongestion')
@@ -25,15 +29,23 @@ def makeResponse(data):
     return resp
 
 
+
+
+
+
+
+"""                             여기서부터                              """
+"""#2                           시각화 전처리                           """
+
 ### 그래프 그리기 위한 그래프 x,y 축 값 추출 후 반환 ###
 def curVisualization():
     conn.commit()
     sql = """SELECT time FROM currentAnalysis ORDER BY time DESC limit 12"""
     c.execute(sql)
-    time = c.fetchall()
-    tmp = [v[0] for v in time]
-    x = [str(v.hour)+"-"+str(v.minute) for v in tmp]
-    x.reverse()
+    DBtime = c.fetchall()
+    tmp = [v[0] for v in DBtime]
+    time = [str(v.hour)+"-"+str(v.minute) for v in tmp]
+    time.reverse()
     #이런 식으로 저장됨
     #x = ['13-48', '13-48', '13-48', '13-49', '13-58', '13-59', '14-0', '14-1', '17-40', '17-50', '18-30', '18-30']
 
@@ -41,14 +53,14 @@ def curVisualization():
     sql = """SELECT result FROM currentAnalysis ORDER BY time DESC limit 12"""
     c.execute(sql)
     res = c.fetchall()
-    y = [v[0] for v in res]
-    y.reverse()
+    nHuman = [v[0] for v in res]
+    nHuman.reverse()
     #이런 식으로 저장됨
     #y = [None, None, None, None, None, None, None, None, None, 2, None, 2] #현재 None 값 때문에 임의로 y 설정
-    y = [3,5,2,1,7,8,9,2,3,4,6,1]
+    nHuman = [3,5,2,1,7,8,9,2,3,4,6,1]
 
 
-    return (x,y)
+    return (time,nHuman)
 
 ### 그래프 그리기 위한 그래프 x,y 축 값 추출 후 반환 ###
 def avgVisualization(target):
@@ -74,12 +86,31 @@ def avgVisualization(target):
     c.execute(sql,(target,))
     avgList += c.fetchall()
     
-    x = [str(v[0]) for v in avgList]
-    y = [v[1] for v in avgList]
+    hour = [str(v[0]) for v in avgList]
+    nHuman = [v[1] for v in avgList]
 
 
 
-    return (x,y,dbResult)
+    return (hour,nHuman,dbResult)
+
+### 한산한 시간대 그래프 그리기 위한 그래프 x,y 축 값 추출 후 반환 ###
+def quietVisualization():
+    conn.commit()
+    sql = """ SELECT hour,result FROM averageAnalysis ORDER BY result desc limit 6"""
+    c.execute(sql)
+    Tquiet = c.fetchall()
+
+    hour = [str(v[0]) for v in Tquiet]
+    nHuman = [v[1] for v in Tquiet]
+    dbResult = [time for time in x][:3]
+
+    return (hour,nHuman,dbResult)
+
+
+
+
+
+"""#3                           시각화                          """
 
 ### 분석 그래프 생성. 현재 디렉토리 "vis.png" ###
 def makeGraph(x,y,type):
@@ -99,23 +130,44 @@ def makeGraph(x,y,type):
         plt.title("Average Congestion")
         avg = plt.gcf()
         avg.savefig("avg.png")
+    elif type == "qtt":
+        plt.clf()
+        plt.plot(x,y,'y')
+        plt.xlabel("time")
+        plt.ylabel("average number of people")
+        plt.title("Most 6 Quiet Time")
+        avg = plt.gcf()
+        avg.savefig("qtt.png")
 
 
 
 
+
+
+
+
+
+"""                 여기서부터                  """
+"""#4                 라우팅                    """
     
 
-@app.route("/getGraph/avg",methods=['GET','POST'])
-def getAvgGraph():
+@app.route("/getGraph/avg/<int:forUpdate>",methods=['GET','POST'])
+def getAvgGraph(forUpdate):
     time.sleep(2)
     filename2 = "avg.png"
     return send_file(filename2, as_attachment=True,mimetype="image/gif")
 
 
-@app.route("/getGraph/cur",methods=['GET','POST'])
-def getCurGraph():
+@app.route("/getGraph/cur/<int:forUpdate>",methods=['GET','POST'])
+def getCurGraph(forUpdate):
     time.sleep(2)
     filename = "cur.png"
+    return send_file(filename, as_attachment=True,mimetype="image/gif")
+
+@app.route("/getGraph/qtt/<int:forUpdate>",methods=['GET','POST'])
+def getQttGraph(forUpdate):
+    time.sleep(2)
+    filename = "qtt.png"
     return send_file(filename, as_attachment=True,mimetype="image/gif")
 
 ### 현재혼잡도 분석값 응답 ###
@@ -155,7 +207,7 @@ def curApple():
     else:
         title = "현재 공간에는 " + str(dbResult) + "명이 있습니다!" 
         description = "위 그래프는 최근 한 시간 혼잡도 분석 결과입니다!\n" 
-        url = "http://110.34.109.166:4967/getGraph/cur"
+        url = "http://110.34.109.166:4967/getGraph/cur/" + str(random.randint(1,1000))
         data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
 
 
@@ -164,7 +216,7 @@ def curApple():
 
 
 ### 평균혼잡도 분석값 응답 ###
-@app.route("/fuck/avgApple",methods=['GET','POST'])
+@app.route("/get/avgApple",methods=['GET','POST'])
 def avgApple():
 
     kakaoReq = request.json
@@ -176,10 +228,9 @@ def avgApple():
 
     #유저가 요청한 시간대 추출
     target = reqTime.hour
-    print(target)
     
-    #x,y,dbResult = avgVisualization(target)
-    x,y,dbResult = avgVisualization(16)
+    x,y,dbResult = avgVisualization(target) #배포용
+    #x,y,dbResult = avgVisualization(16) #테스트용
     makeGraph(x,y,"avg")
     
 
@@ -190,43 +241,53 @@ def avgApple():
     else:
         title = "이 시간대에는 평균 " + str(dbResult) + "명이 있습니다!" 
         description = "위 그래프는 현재 기준 전,후 3시간 동안의 평균 혼잡도 분석 결과입니다!\n" 
-        url = "http://110.34.109.166:4967/getGraph/avg"
+        url = "http://110.34.109.166:4967/getGraph/avg/" + str(random.randint(1,1000))
         data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
 
     #응답 전송
     resp = makeResponse(data)
     return resp
 
-@app.route('/favicon.ico',methods=['GET','POST'])
-def favicon():
-    filename = "vis.png"
-    return send_file(filename, mimetype="image/gif")
-
 ### 한산한 시간대 분석값 응답 ###
-@app.route("/timeAnal",methods=['GET','POST'])
-def timeAnal():
+@app.route("/get/quietTime",methods=['GET','POST'])
+def quietT():
 
     kakaoReq = request.json
 
     #요청한 유저 정보 추출
     #userId = kakaoReq["userRequest"]["user"]["id"] #배포용
-    userId = "test getTimeAnal" #테스트용
+    userId = "test getQuietTime" #테스트용
     reqTime = datetime.datetime.now()
 
-    #DB 연동 1,2,3,4,5주전 결과 값을 들고 와야 함. DB에서 그렇게 긁어 오는 법을 알아내야 함. 긁어와서 언제가 한산한지 보내기만 하면 됨.
-    '''
-    sql = """SELECT requestTime FROM customerKakao WHERE requestTime >= DATE_ADD(NOW(), INTERVAL -1 WEEK)"""
-    c.execute(sql)
-    dbResult = c.fetchone()[0]
+    #DB에 유저 정보 삽입
+    conn.commit()
     sql = """INSERT INTO customerKakao (id, requestTime) VALUES (%s,%s)"""
     c.execute(sql,(userId,reqTime))
     conn.commit()
-    '''
 
-    text = "한산한 시간대 분석 기능은 현재 업데이트 예정 기능입니다!"
-    data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
+    x,y,dbResult = avgVisualization(target)
+    makeGraph(x,y,"qtt")
+
+
+
+    #이상치 제거
+    if(dbResult == None):
+        text = "현재 분석이 불가능하니 잠시만 기다려주세요!"
+        data = {"version": "2.0","template":{"outputs":[{"simpleText":{"text":text}}]}}
+    else:
+        title = "평균적으로 한산한 시간대는 {0}시, {1}시, {2}시 순입니다!".format(dbResult[0],dbResult[1],dbResult[2])
+        description = "위 그래프는 평균적으로 가장 한산한 6시간을 분석한 그래프입니다.\n" 
+        url = "http://110.34.109.166:4967/getGraph/qtt/" + str(random.randint(1,1000))
+        data = {"version": "2.0","template": {"outputs":[{"basicCard":{"title":title,"description":description,"thumbnail":{"imageUrl":url,"fixedRatio":"true","width":"640","height":"480"}}}]}}
+
     resp = makeResponse(data)
     return resp
+
+# fabicon 404 오류 방지
+@app.route('/favicon.ico',methods=['GET','POST'])
+def favicon():
+    filename = "vis.png"
+    return send_file(filename, mimetype="image/gif")
 
 if __name__ == "__main__":
     app.run(debug=True,host="0.0.0.0", port=4967)
