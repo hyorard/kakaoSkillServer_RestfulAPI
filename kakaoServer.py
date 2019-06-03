@@ -148,7 +148,23 @@ def makeGraph(x,y,type):
 
 """                 여기서부터                  """
 """#4                 라우팅                    """
+@app.route("/getImg/capstone/<int:forUpdate>",methods=['GET','POST'])
+def getCapImg(forUpdate):
+    time.sleep(1)
+    filename2 = "capstoneImage.jpeg"
+    return send_file(filename2, as_attachment=True,mimetype="image/gif")
 
+@app.route("/getImg/henesis/<int:forUpdate>",methods=['GET','POST'])
+def getCapImg(forUpdate):
+    time.sleep(1)
+    filename2 = "henesis.png"
+    return send_file(filename2, as_attachment=True,mimetype="image/gif")
+
+@app.route("/getImg/elinia/<int:forUpdate>",methods=['GET','POST'])
+def getCapImg(forUpdate):
+    time.sleep(1)
+    filename2 = "elinia.png"
+    return send_file(filename2, as_attachment=True,mimetype="image/gif")
 
 @app.route("/getGraph/avg/<int:forUpdate>",methods=['GET','POST'])
 def getAvgGraph(forUpdate):
@@ -168,6 +184,27 @@ def getQttGraph(forUpdate):
     time.sleep(1)
     filename = "qtt.png"
     return send_file(filename, as_attachment=True,mimetype="image/gif")
+
+### 캐로셀로 환영 인사 ###
+@app.route("/get/Carousel",methods=['GET','POST'])
+def Carousel():
+
+    kakaoReq = request.json
+
+    #요청한 유저 정보 추출
+    userId = kakaoReq["userRequest"]["user"]["id"] #배포용
+    #userId = "test getCurApple" #테스트용
+    reqTime = datetime.datetime.now()
+
+    #DB에 유저 정보 삽입
+    conn.commit()
+    sql = """INSERT INTO customerKakao (id, requestTime) VALUES (%s,%s)"""
+    c.execute(sql,(userId,reqTime))
+    conn.commit()
+
+    data = {"version": "2.0","template": {"outputs": [{"carousel": {"type": "CommerceCard","items": [{"title": "종합설계 프로젝트","description": "여기를 클릭하여 우리의 프로젝트를 확인하세요.","thumbnail": {"imageUrl": "http://110.34.109.166:4967/getImg/capstone/{0}".format(random.randint(1,1000))},"buttons": [{"action": "block","label": "혼잡도 분석","blockId": "5c95f7015f38dd476721b9f6"}]},{"title": "스터디라운지1","description": "스터디라운지1의 혼잡도를 분석해드립니다.","thumbnail": {"imageUrl": "http://110.34.109.166:4967/getImg/henesis/{0}".format(random.randint(1,1000))},"buttons": [{"action": "message","label": "혼잡도 분석","messageText": "죄송합니다. 아직 서비스 개발 중입니다."}]},{"title": "스터디라운지2","description": "스터디라운지2의 혼잡도를 분석해드립니다.","thumbnail": {"imageUrl": "http://110.34.109.166:4967/getImg/elinia/{0}".format(random.randint(1,1000))},"buttons": [{"action": "message","label": "혼잡도 분석","messageText": "죄송합니다. 아직 서비스 개발 중입니다."}]}]}}]}}
+    resp = makeResponse(data)
+    return resp
 
 ### 현재혼잡도 분석값 응답 ###
 @app.route("/get/curApple",methods=['GET','POST'])
